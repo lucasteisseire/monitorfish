@@ -5,31 +5,11 @@ import prefect
 from prefect import Flow, task
 
 from src.pipeline.generic_tasks import extract, load
+from src.pipeline.helpers.segments import catch_zone_isin_fao_zone
 from src.pipeline.processing import df_to_dict_series
 from src.read_query import read_saved_query
 
 
-# ************************************** Helpers **************************************
-def catch_zone_isin_fao_area(
-    catch_zone: Union[None, str], fao_area: Union[None, str]
-) -> bool:
-    """Return
-    - True if a catch zone (e.g. '27.7.b') is in a given fao_area (e.g. '27.7.b' or
-    '27')
-    - False if a catch zone (e.g. '27.7.b') is NOT in a given fao_area (e.g. '28.6' or
-    '27.7.b.4')
-    - True if the fao_area if None (whatever the value of the catch_zone)
-    - False if the fao_area is not None and the catch_zone is None
-    """
-    if fao_area is None:
-        return True
-    elif catch_zone is None:
-        return False
-    else:
-        return fao_area in catch_zone
-
-
-# ********************************** Tasks and flow **********************************
 @task(checkpoint=False)
 def extract_catches():  # pragma: no cover
     return extract(
