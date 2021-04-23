@@ -5,7 +5,7 @@ import prefect
 from prefect import Flow, task
 
 from src.pipeline.generic_tasks import extract, load
-from src.pipeline.helpers.segments import catch_zone_isin_fao_zone
+from src.pipeline.helpers.segments import attribute_segments_to_catches
 from src.pipeline.processing import df_to_dict_series
 from src.read_query import read_saved_query
 
@@ -37,79 +37,26 @@ def unnest(segments):
 @task(checkpoint=False)
 def compute_current_segments(catches, segments):
 
-    catches_ = catches[["cfr", "gear", "fao_area", "species", "weight"]]
-    segments_ = segments[["segment", "gear", "fao_area", "species"]]
-
-    # Merge catches and segments on gear and species
-    current_segments_gear_species = pd.merge(
-        segments_,
-        catches_,
-        on=["species", "gear"],
-        suffixes=("_of_segment", "_of_catch"),
+    current_segments = attribute_segments_to_catches(
+        catches[["cfr", "gear", "fao_area", "species"]],
+        segments[["segment", "gear", "fao_area", "species"]],
     )
 
-    # Merge catches and segments only on gear, for segments without a species criterion
-    segments_gear_only = segments_[segments_.species.isna()].drop(columns=["species"])
+    # Aggregate by vessel
+    current_segments = current_segments.groupby("cfr")["segment"].unique()
+    current_segments = current_segments.rename("segments")
 
-    current_segments_gear_only = pd.merge(
-        segments_gear_only, catches_, on="gear", suffixes=("_of_segment", "_of_catch")
+    total_catch_weight = catches.groupby("cfr")["weight"].sum()
+    total_catch_weight = total_catch_weight.rename("total_weight_onboard")
+
+    current_segments = pd.merge(
+        current_segments,
+        total_catch_weight,
+        left_index=True,
+        right_index=True,
+        how="outer",
     )
 
-    # Merge catches and segments only on species, for segments without a gear criterion
-    segments_species_only = segments_[segments_.gear.isna()].drop(columns=["gear"])
-
-    current_segments_species_only = pd.merge(
-        segments_species_only,
-        catches_,
-        on="species",
-        suffixes=("_of_segment", "_of_catch"),
-    )
-
-    # Match catches to all segments that have no criterion on species nor on gears
-    segments_no_gear_no_species = segments_[
-        segments_[["gear", "species"]].isna().all(axis=1)
-    ][["segment", "fao_area"]]
-
-    current_segments_no_gear_no_species = pd.merge(
-        segments_no_gear_no_species,
-        catches_,
-        how="cross",
-        suffixes=("_of_segment", "_of_catch"),
-    )
-
-    # Concatenate the 4 sets of matched (catches, segments)
-    current_segments = pd.concat(
-        [
-            current_segments_gear_species,
-            current_segments_gear_only,
-            current_segments_species_only,
-            current_segments_no_gear_no_species,
-        ]
-    )
-
-    # Matched (catches, segments) now need to be filtered to keep only the matches
-    # that satisfy the fao_area criterion. A catch made in '27.7.b' will satisfy
-    # the fao criterion of a segment whose fao_area is '27.7', so we check that the
-    # fao zone of the segment is a substring of the fao zone of the catch.
-    current_segments = current_segments[
-        (
-            current_segments.apply(
-                lambda row: catch_zone_isin_fao_area(
-                    row.fao_area_of_catch, row.fao_area_of_segment
-                ),
-                axis=1,
-            )
-        )
-    ]
-
-    # Finally, aggregate by vessel
-    current_segments = current_segments.groupby("cfr")[["segment", "weight"]].agg(
-        {"segment": "unique", "weight": "sum"}
-    )
-
-    current_segments = current_segments.rename(
-        columns={"segment": "segments", "weight": "total_weight_onboard"}
-    )
     return current_segments
 
 

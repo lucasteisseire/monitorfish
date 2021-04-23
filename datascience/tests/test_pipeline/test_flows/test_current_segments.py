@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 
 from src.pipeline.flows.current_segments import (
-    catch_zone_isin_fao_area,
     compute_current_segments,
     merge_segments_catches,
     unnest,
@@ -13,15 +12,6 @@ from src.pipeline.flows.current_segments import (
 
 
 class TestCurrentSegmentsFlow(unittest.TestCase):
-    def test_catch_zone_isin_fao_area(self):
-        self.assertTrue(catch_zone_isin_fao_area("27", "27"))
-        self.assertTrue(catch_zone_isin_fao_area("27.7", "27"))
-        self.assertTrue(catch_zone_isin_fao_area("27.7", None))
-        self.assertFalse(catch_zone_isin_fao_area(None, "27.7"))
-        self.assertFalse(catch_zone_isin_fao_area("27", "27.7"))
-
-        self.assertTrue(catch_zone_isin_fao_area(None, None))
-
     def test_unnest(self):
         segments_definitions = [
             [
@@ -94,6 +84,7 @@ class TestCurrentSegmentsFlow(unittest.TestCase):
         expected_segments = {
             "vessel_1": {"A", "B"},
             "vessel_2": {"A", "E", "F"},
+            "vessel_3": np.nan,
             "vessel_4": {"B", "D"},
         }
 
@@ -107,9 +98,16 @@ class TestCurrentSegmentsFlow(unittest.TestCase):
             set(res.loc["vessel_2", "segments"]), set(expected_segments["vessel_2"])
         )
 
+        self.assertTrue(np.isnan(res.loc["vessel_3", "segments"]))
+
         self.assertEqual(
             set(res.loc["vessel_4", "segments"]), set(expected_segments["vessel_4"])
         )
+
+        self.assertEqual(res.loc["vessel_1", "total_weight_onboard"], 123.56)
+        self.assertEqual(res.loc["vessel_2", "total_weight_onboard"], 1231.4)
+        self.assertEqual(res.loc["vessel_3", "total_weight_onboard"], 1203.4)
+        self.assertEqual(res.loc["vessel_4", "total_weight_onboard"], 1247.4)
 
     def test_merge_segments_catches(self):
         catches = pd.DataFrame(

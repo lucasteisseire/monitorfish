@@ -7,7 +7,7 @@
 # Segments de flotte : % de captures par segment - en kg et / ou en nb de FAR
 # Top espèces
 # Top engins
-# Top zones
+# Top areas
 # Km parcourus
 
 ###################################### Controls ######################################
@@ -28,7 +28,8 @@ import prefect
 from prefect import Flow, task
 
 from src.pipeline.generic_tasks import extract, load
-from src.pipeline.helpers.segments import catch_zone_isin_fao_zone
+from src.pipeline.helpers.profiles import compute_vessels_catches_percentage_by
+from src.pipeline.helpers.segments import attribute_segments_to_catches
 from src.pipeline.processing import df_to_dict_series
 from src.read_query import read_saved_query
 
@@ -38,13 +39,14 @@ def extract_catches():
     return extract(
         db_name="monitorfish_remote",
         query_filepath="monitorfish/twelve_months_catches.sql",
-        #         dtypes={
-        #             "ers_id": "category",
-        #             "cfr": "category",
-        #             "gear": "category",
-        #             "species": "category",
-        #             "fao_zone": "category",
-        #         }
+        dtypes={
+            "ers_id": "category",
+            "cfr": "category",
+            "gear": "category",
+            "species": "category",
+            "fao_area": "category",
+            "computed_trip_number": "category",
+        },
     )
 
 
@@ -59,119 +61,78 @@ def extract_segments():
 def unnest(segments: pd.DataFrame) -> pd.DataFrame:
     return (
         segments.explode("gears")
-        .explode("fao_zones")
+        .explode("fao_areas")
         .explode("species")
-        .rename(columns={"fao_zones": "fao_zone", "gears": "gear"})
+        .rename(columns={"fao_areas": "fao_area", "gears": "gear"})
     )
 
 
 @task(checkpoint=False)
-def compute_segments(catches: pd.DataFrame, segments: pd.DataFrame) -> pd.DataFrame:
+def compute_profiles(catches: pd.DataFrame, segments: pd.DataFrame) -> pd.DataFrame:
 
-    catches_ = catches[["cfr", "ers_id", "gear", "fao_zone", "species", "weight"]]
-    segments_ = segments[["segment", "gear", "fao_zone", "species"]]
+    catches = catches.fillna({"weight": 0}).copy(deep=True)
 
-    # Merge catches and segments on gear and species
-    segments_gear_species = pd.merge(
-        segments_,
-        catches_,
-        on=["species", "gear"],
-        suffixes=("_of_segment", "_of_catch"),
+    #     segmented_catches = (
+    #         attribute_segments_to_catches(
+    #             catches[["cfr", "ers_id", "gear", "fao_area", "species", "weight"]],
+    #             segments[["segment", "gear", "fao_area", "species"]],
+    #         )
+    #         .groupby(["cfr", "segment"], observed=True)[["weight"]]
+    #         .sum()
+    #         .reset_index()
+    #     )
+
+    total_catches = (
+        catches.groupby("cfr")["weight"].sum().rename("twelve_months_catch_weight")
     )
+    catches_by_gear = compute_vessels_catches_percentage_by(catches, "gear")
+    catches_by_species = compute_vessels_catches_percentage_by(catches, "species")
+    catches_by_fao_area = compute_vessels_catches_percentage_by(catches, "fao_area")
 
-    # Merge catches and segments only on gear, for segments without a species criterion
-    segments_gear_only_ = segments_[segments_.species.isna()].drop(columns=["species"])
-
-    segments_gear_only = pd.merge(
-        segments_gear_only_, catches_, on="gear", suffixes=("_of_segment", "_of_catch")
-    )
-
-    # Merge catches and segments only on species, for segments without a gear criterion
-    segments_species_only_ = segments_[segments_.gear.isna()].drop(columns=["gear"])
-
-    segments_species_only = pd.merge(
-        segments_species_only_,
-        catches_,
-        on="species",
-        suffixes=("_of_segment", "_of_catch"),
-    )
-
-    # Match catches to all segments that have no criterion on species nor on gears
-    segments_no_gear_no_species_ = segments_[
-        segments_[["gear", "species"]].isna().all(axis=1)
-    ][["segment", "fao_zone"]]
-
-    segments_no_gear_no_species = pd.merge(
-        segments_no_gear_no_species_,
-        catches_,
-        how="cross",
-        suffixes=("_of_segment", "_of_catch"),
-    )
-
-    # Concatenate the 4 sets of matched (catches, segments)
-    segments_ = pd.concat(
-        [
-            segments_gear_species,
-            segments_gear_only,
-            segments_species_only,
-            segments_no_gear_no_species,
-        ]
-    )
-
-    # Matched (catches, segments) now need to be filtered to keep only the matches
-    # that satisfy the fao_zone criterion. A catch made in '27.7.b' will satisfy
-    # the fao criterion of a segment whose fao_zone is '27.7', so we check that the
-    # fao zone of the segment is a substring of the fao zone of the catch.
-    segments_ = segments_[
-        (
-            segments_.apply(
-                lambda row: catch_zone_isin_fao_zone(
-                    row.fao_zone_of_catch, row.fao_zone_of_segment
-                ),
-                axis=1,
-            )
-        )
-    ]
-
-    # Finally, aggregate by vessel and by segment
-    segments_ = (
-        segments_.groupby(["cfr", "segment"], observed=True)[["weight"]]
+    typical_catch_weight_by_trip = (
+        catches.groupby(["cfr", "computed_trip_number"], observed=True)["weight"]
         .sum()
         .reset_index()
+        .groupby("cfr")["weight"]
+        .median()
     )
 
-    #     total_catches_by_vessel = catches.groupby("cfr")["weight"].sum()
+    number_of_trips = catches.groupby("cfr")["computed_trip_number"].nunique()
 
-    #     segments_
+    res = pd.merge(total_catches, catches_by_gear, left_index=True, right_index=True)
 
-    return segments_
+    res = pd.merge(res, catches_by_species, left_index=True, right_index=True)
 
+    res = pd.merge(res, catches_by_fao_area, left_index=True, right_index=True)
 
-@task(checkpoint=False)
-def load_vessels_profiles(vessels_segments):  # pragma: no cover
-    logger = prefect.context.get("logger")
-    load(
-        vessels_segments,
-        table_name="current_segments",
-        schema="public",
-        db_name="monitorfish_remote",
-        logger=logger,
-        delete_before_insert=True,
-        pg_array_columns=["segments"],
-        handle_array_conversion_errors=True,
-        value_on_array_conversion_error="{}",
-        jsonb_columns=["gear_onboard", "species_onboard"],
-    )
+    res = pd.merge(res, typical_catch_weight_by_trip, left_index=True, right_index=True)
+
+    res = pd.merge(res, number_of_trips, left_index=True, right_index=True)
+    return res
 
 
-# with Flow(
-#     "Extract the last DEP of each vessel in the `ers` table, "
-#     "load into the `current_segments` table"
-# ) as flow:
+# @task(checkpoint=False)
+# def load_vessels_profiles(vessels_segments):  # pragma: no cover
+#     logger = prefect.context.get("logger")
+#     load(
+#         vessels_segments,
+#         table_name="current_segments",
+#         schema="public",
+#         db_name="monitorfish_remote",
+#         logger=logger,
+#         delete_before_insert=True,
+#         pg_array_columns=["segments"],
+#         handle_array_conversion_errors=True,
+#         value_on_array_conversion_error="{}",
+#         jsonb_columns=["gear_onboard", "species_onboard"],
+#     )
 
-#     catches = extract_catches()
-#     segments = extract_segments()
-#     segments = unnest(segments)
-#     current_segments = compute_segments(catches, segments)
+
+with Flow("Updte vessels risk profile") as flow:
+
+    catches = extract_catches()
+    segments = extract_segments()
+    segments = unnest(segments)
+    vessels_profiles = compute_profiles(catches, segments)
 #     current_segments = merge_segments_catches(catches, current_segments)
 #     load_current_segments(current_segments)
