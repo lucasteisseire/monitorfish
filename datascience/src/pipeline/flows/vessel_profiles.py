@@ -28,10 +28,28 @@ import prefect
 from prefect import Flow, task
 
 from src.pipeline.generic_tasks import extract, load
-from src.pipeline.helpers.profiles import compute_vessels_catches_percentage_by
-from src.pipeline.helpers.segments import attribute_segments_to_catches
+from src.pipeline.helpers.profiles import (
+    compute_vessels_catch_profiles_by,
+    compute_vessels_segments_profiles,
+)
 from src.pipeline.processing import df_to_dict_series
 from src.read_query import read_saved_query
+
+
+@task(checkpoint=False)
+def extract_lengths():
+    return extract(
+        db_name="monitorfish_remote",
+        query_filepath="monitorfish/vessel_lengths.sql",
+    )
+
+
+@task(checkpoint=False)
+def extract_trips():
+    return extract(
+        db_name="monitorfish_remote",
+        query_filepath="monitorfish/twelve_months_trips.sql",
+    )
 
 
 @task(checkpoint=False)
@@ -68,71 +86,127 @@ def unnest(segments: pd.DataFrame) -> pd.DataFrame:
 
 
 @task(checkpoint=False)
-def compute_profiles(catches: pd.DataFrame, segments: pd.DataFrame) -> pd.DataFrame:
+def compute_profiles(
+    catches: pd.DataFrame,
+    segments: pd.DataFrame,
+    lengths: pd.DataFrame,
+    trips: pd.DataFrame,
+) -> pd.DataFrame:
+
+    logger = prefect.context.get("logger")
 
     catches = catches.fillna({"weight": 0}).copy(deep=True)
 
-    #     segmented_catches = (
-    #         attribute_segments_to_catches(
-    #             catches[["cfr", "ers_id", "gear", "fao_area", "species", "weight"]],
-    #             segments[["segment", "gear", "fao_area", "species"]],
-    #         )
-    #         .groupby(["cfr", "segment"], observed=True)[["weight"]]
-    #         .sum()
-    #         .reset_index()
-    #     )
+    catch_columns = [
+        "cfr",
+        "computed_trip_number",
+        "ers_id",
+        "gear",
+        "fao_area",
+        "species",
+        "weight",
+    ]
+    catches = catches[catch_columns]
 
-    total_catches = (
-        catches.groupby("cfr")["weight"].sum().rename("twelve_months_catch_weight")
-    )
-    catches_by_gear = compute_vessels_catches_percentage_by(catches, "gear")
-    catches_by_species = compute_vessels_catches_percentage_by(catches, "species")
-    catches_by_fao_area = compute_vessels_catches_percentage_by(catches, "fao_area")
+    logger.info("Compute vessels' catch profiles by gear, by species and by fao area.")
+    catches_by_gear = compute_vessels_catch_profiles_by(catches, "gear")
+    catches_by_species = compute_vessels_catch_profiles_by(catches, "species")
+    catches_by_fao_area = compute_vessels_catch_profiles_by(catches, "fao_area")
 
+    logger.info("Compute vessels' typical (median) catch weight per trip.")
     typical_catch_weight_by_trip = (
         catches.groupby(["cfr", "computed_trip_number"], observed=True)["weight"]
         .sum()
         .reset_index()
-        .groupby("cfr")["weight"]
+        .groupby("cfr", observed=True)["weight"]
         .median()
+        .rename("typical_trip_catch_weight")
     )
 
-    number_of_trips = catches.groupby("cfr")["computed_trip_number"].nunique()
+    logger.info("Compute vessels' catch profiles by fleet segment.")
+    vessels_segments_profiles = compute_vessels_segments_profiles(
+        catches,
+        segments,
+        unassigned_catches_segment_label="Aucun",
+    ).rename(columns={"total_catch_weight": "catch_weight_per_year"})
 
-    res = pd.merge(total_catches, catches_by_gear, left_index=True, right_index=True)
+    logger.info("Merge all profiles.")
+    vessels_profiles = pd.merge(
+        vessels_segments_profiles,
+        catches_by_gear,
+        left_index=True,
+        right_index=True,
+        how="outer",
+    )
 
-    res = pd.merge(res, catches_by_species, left_index=True, right_index=True)
+    vessels_profiles = pd.merge(
+        vessels_profiles,
+        catches_by_species,
+        left_index=True,
+        right_index=True,
+        how="outer",
+    )
 
-    res = pd.merge(res, catches_by_fao_area, left_index=True, right_index=True)
+    vessels_profiles = pd.merge(
+        vessels_profiles,
+        catches_by_fao_area,
+        left_index=True,
+        right_index=True,
+        how="outer",
+    )
 
-    res = pd.merge(res, typical_catch_weight_by_trip, left_index=True, right_index=True)
+    vessels_profiles = pd.merge(
+        vessels_profiles,
+        typical_catch_weight_by_trip,
+        left_index=True,
+        right_index=True,
+        how="outer",
+    )
 
-    res = pd.merge(res, number_of_trips, left_index=True, right_index=True)
-    return res
+    vessels_profiles = pd.merge(
+        vessels_profiles,
+        trips.set_index("cfr"),
+        left_index=True,
+        right_index=True,
+        how="outer",
+    )
+
+    vessels_profiles = pd.merge(
+        vessels_profiles,
+        lengths.set_index("cfr"),
+        left_index=True,
+        right_index=True,
+        how="left",
+    )
+
+    return vessels_profiles.reset_index()
 
 
-# @task(checkpoint=False)
-# def load_vessels_profiles(vessels_segments):  # pragma: no cover
-#     logger = prefect.context.get("logger")
-#     load(
-#         vessels_segments,
-#         table_name="current_segments",
-#         schema="public",
-#         db_name="monitorfish_remote",
-#         logger=logger,
-#         delete_before_insert=True,
-#         pg_array_columns=["segments"],
-#         handle_array_conversion_errors=True,
-#         value_on_array_conversion_error="{}",
-#         jsonb_columns=["gear_onboard", "species_onboard"],
-#     )
+@task(checkpoint=False)
+def load_vessels_profiles(vessels_profiles):
+
+    load(
+        vessels_profiles,
+        table_name="vessels_profiles",
+        schema="public",
+        db_name="monitorfish_remote",
+        logger=prefect.context.get("logger"),
+        delete_before_insert=True,
+        jsonb_columns=[
+            "segment_profile",
+            "gear_profile",
+            "species_profile",
+            "fao_area_profile",
+        ],
+    )
 
 
-with Flow("Updte vessels risk profile") as flow:
+with Flow("Update vessels profiles") as flow:
 
     catches = extract_catches()
+    lengths = extract_lengths()
+    trips = extract_trips()
     segments = extract_segments()
     segments = unnest(segments)
-    vessels_profiles = compute_profiles(catches, segments)
-#     current_segments = merge_segments_catches(catches, current_segments)
-#     load_current_segments(current_segments)
+    vessels_profiles = compute_profiles(catches, segments, lengths, trips)
+    load_vessels_profiles(vessels_profiles)

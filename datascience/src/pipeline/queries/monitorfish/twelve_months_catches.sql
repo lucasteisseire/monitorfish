@@ -31,8 +31,7 @@ catches AS (
     FROM public.ers
     WHERE operation_datetime_utc >= CURRENT_TIMESTAMP - INTERVAL '1 year'
     AND operation_type = 'DAT'
-    AND log_type = 'FAR'
-    LIMIT 10000)
+    AND log_type = 'FAR')
     
 SELECT 
     far_trip_numbers.cfr,
