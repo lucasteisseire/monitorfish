@@ -3,16 +3,18 @@ import os
 from datetime import date
 from time import sleep
 
+import geopandas as gpd
 import pandas as pd
 import prefect
 import requests
 from prefect import Flow, Parameter, task
+from shapely import wkt
 
 from config import LIBRARY_LOCATION, PORTS_URL, PROXIES
 from src.db_config import create_engine
 from src.pipeline.processing import combine_overlapping_columns
 from src.pipeline.utils import delete, get_table, psql_insert_copy
-from src.read_query import read_table
+from src.read_query import read_saved_query, read_table
 from src.utils.geocode import geocode
 
 
@@ -362,6 +364,15 @@ def extract_geocoded_ports():
 
 
 @task(checkpoint=False)
+def extract_ports_geometries():
+    ports_geometries = read_saved_query("fmc", "fmc/ports_geometries.sql")
+    ports_geometries = gpd.GeoDataFrame(
+        ports_geometries, geometry=ports_geometries.geometry.map(wkt.loads)
+    )
+    return ports_geometries
+
+
+@task(checkpoint=False)
 def merge_lat_lon(geocoded_ports):
     combine_cols = {
         "latitude": ["geocoded_latitude", "latitude"],
@@ -382,6 +393,11 @@ def add_manual_fixes(ports):
 
 
 @task(checkpoint=False)
+def merge_geometries(ports, ports_geometries):
+    return pd.merge(ports, ports_geometries, on="locode", how="left")
+
+
+@task(checkpoint=False)
 def load_ports(ports):
     engine = create_engine("monitorfish_remote")
     ports.to_sql(
@@ -398,9 +414,11 @@ with Flow(
     "Load ports from interim.geocoded_ports to processed.ports"
 ) as flow_load_ports:
     geocoded_ports = extract_geocoded_ports()
+    ports_geometries = extract_ports_geometries()
     ports = merge_lat_lon(geocoded_ports)
     ports = add_manual_fixes(ports)
-    load_ports(ports)
+    ports = merge_geometries(ports, ports_geometries)
+#     load_ports(ports)
 
 
 # **** Flow to extract ports from data.gouv.fr and upload to Monitorfish database ****

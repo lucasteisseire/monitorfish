@@ -1,5 +1,6 @@
 SELECT
     cfr,
-    length
+    length,
+    flag_state
 FROM public.vessels
 WHERE cfr IS NOT NULL

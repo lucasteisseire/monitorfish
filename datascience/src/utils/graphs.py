@@ -1,7 +1,10 @@
+import geopandas as gpd
+import h3
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
 from matplotlib_venn import venn3
+from shapely.geometry import Polygon
 
 
 def dataframe_inventory(df: pd.DataFrame, title=None, fig_height=None):
@@ -91,3 +94,23 @@ class pcolor:
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
     END = "\033[0m"
+
+
+def view_h3_hexagons(df: pd.DataFrame, h3_column: str = "h3", **kwargs):
+    hexagons = df[h3_column].map(
+        lambda h: Polygon(h3.h3_to_geo_boundary(h, geo_json=True))
+    )
+    plot_df = gpd.GeoDataFrame(df, geometry=hexagons.values)
+    plot_df = plot_df.set_crs(4326)
+
+    fig = px.choropleth_mapbox(
+        plot_df,
+        geojson=plot_df.geometry,
+        locations=plot_df.index,
+        zoom=2,
+        height=800,
+        width=1000,
+        **kwargs,
+    )
+
+    return fig
