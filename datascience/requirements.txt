@@ -40,6 +40,7 @@ isort==5.7.0; python_version >= "3.6" and python_version < "4.0"
 itemadapter==0.2.0; python_version >= "3.6"
 itemloaders==1.0.4; python_version >= "3.6"
 jmespath==0.10.0; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.6"
+joblib==1.0.1; python_version >= "3.6"
 jsonschema==3.2.0; python_version >= "3.4"
 lxml==4.6.3; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.6"
 marshmallow-oneofschema==2.1.0; python_version >= "3.6"
@@ -84,17 +85,21 @@ pyyaml==5.4.1; python_full_version >= "3.6.1" and python_version >= "3.4" and (p
 queuelib==1.5.0; python_version >= "3.6"
 regex==2020.11.13; python_version >= "3.6"
 requests==2.25.1; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.6"
+scikit-learn==0.24.2; python_version >= "3.6"
+scipy==1.6.1; python_version >= "3.7"
 scrapy==2.4.1; python_version >= "3.6"
 service-identity==18.1.0; python_version >= "3.6"
 shapely==1.7.1; python_version >= "3.6"
 simplejson==3.17.2; (python_version >= "2.5" and python_full_version < "3.0.0") or (python_full_version >= "3.3.0")
 six==1.15.0; python_full_version >= "3.7.1" and python_version >= "3.6" and (python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.6") and (python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.6") and (python_version >= "3.4" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.4") and (python_version >= "3.4" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.4") and (python_version >= "3.4" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.4")
+sklearn==0.0
 sortedcontainers==2.3.0; python_version >= "3.6"
 sqlalchemy==1.3.23; (python_version >= "2.7" and python_full_version < "3.0.0") or (python_full_version >= "3.4.0")
 tabulate==0.8.8; python_version >= "3.6"
 tblib==1.7.0; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.6"
 text-unidecode==1.3; python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.6"
 texttable==1.6.3; python_version >= "3.4"
+threadpoolctl==2.1.0; python_version >= "3.6"
 toml==0.10.2; python_full_version >= "3.6.1" and python_version >= "3.6" and (python_version >= "3.6" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.6")
 toolz==0.11.1; python_version >= "3.6"
 tornado==6.1; python_version >= "3.8"
