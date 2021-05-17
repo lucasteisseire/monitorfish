@@ -52,7 +52,8 @@ def compute_vessels_segments_profiles(
         assert {"segment", "species", "gear", "fao_area"}.issubset(list(segments))
     except AssertionError:
         raise ValueError(
-            "catches and segments must include columns gear, fao_area and species."
+            "catches must include columns gear, fao_area, species and weight. "
+            "segments must include columns segment, gear, fao_area and species."
         )
 
     total_catches = (
