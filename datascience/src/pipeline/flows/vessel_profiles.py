@@ -37,6 +37,18 @@ from src.read_query import read_saved_query
 
 
 @task(checkpoint=False)
+def extract_all_recent_positions(within: str = "1 month"):
+    positions = extract(
+        db_name="monitorfish_remote",
+        query_filepath="monitorfish/all_positions.sql",
+        dtypes={"cfr": "category"},
+        params={"within": within},
+    )
+    positions = positions.set_index("date_time")
+    return positions
+
+
+@task(checkpoint=False)
 def extract_lengths():
     return extract(
         db_name="monitorfish_remote",
