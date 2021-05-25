@@ -302,9 +302,16 @@ def enrich_positions(
     return enriched_positions
 
 
-def compute_fishing_and_transit_speeds(
-    speed_arr, init_fishing_speed=None, init_transit_speed=None
+def find_fishing_transit_speed_threshold(
+    speed_arr,
+    init_fishing_speed=None,
+    init_transit_speed=None,
+    default_speed_threshold=4.5,
+    min_points=200,
+    min_cluster_separation=2.2,
 ):
+
+    speed_arr = speed_arr[(speed_arr > 0) & (speed_arr < 15)]
 
     if init_fishing_speed is not None and init_transit_speed is not None:
         init = np.array([[init_fishing_speed], [init_transit_speed]])
@@ -313,11 +320,13 @@ def compute_fishing_and_transit_speeds(
         init = "k-means++"
         n_init = 10
 
-    if len(speed_arr) < 2:
-        fishing_speed = (None,)
-        transit_speed = (None,)
-        fishing_std = (None,)
+    if len(speed_arr) < min_points:
+        fishing_speed = None
+        transit_speed = None
+        fishing_std = None
         transit_std = None
+        fishing_speed_threshold = default_speed_threshold
+        cluster_separation = None
 
     else:
         (centroids, labels, _) = k_means(
@@ -336,40 +345,19 @@ def compute_fishing_and_transit_speeds(
         fishing_std = speed_arr[fishing_indices].std()
         transit_std = speed_arr[~fishing_indices].std()
 
-    return fishing_speed, transit_speed, fishing_std, transit_std
-
-
-def find_fishing_transit_speed_threshold(
-    speed_arr, init_fishing_speed=None, init_transit_speed=None
-):
-
-    (
-        fishing_speed,
-        transit_speed,
-        fishing_std,
-        transit_std,
-    ) = compute_fishing_and_transit_speeds(
-        speed_arr[(speed_arr > 0) & (speed_arr < 15)],
-        init_fishing_speed=init_fishing_speed,
-        init_transit_speed=init_transit_speed,
-    )
+        cluster_separation = (transit_speed - fishing_speed) / (
+            transit_std + fishing_std
+        )
+        if cluster_separation > min_cluster_separation:
+            fishing_speed_threshold = (
+                fishing_speed * transit_std + transit_speed * fishing_std
+            ) / (fishing_std + transit_std)
+        else:
+            fishing_speed_threshold = default_speed_threshold
 
     counts, bins = np.histogram(
         speed_arr[(speed_arr > 0) & (speed_arr < 15)], bins=np.arange(0, 15, 0.5)
     )
-
-    if (
-        fishing_speed is not None
-        and transit_speed is not None
-        and fishing_std is not None
-        and transit_std is not None
-    ):
-
-        fishing_speed_threshold = (
-            fishing_speed * transit_std + transit_speed * fishing_std
-        ) / (fishing_std + transit_std)
-    else:
-        fishing_speed_threshold = None
 
     return (
         bins,
@@ -379,12 +367,14 @@ def find_fishing_transit_speed_threshold(
         transit_speed,
         transit_std,
         fishing_speed_threshold,
+        cluster_separation,
     )
 
 
-def get_trip_stats(positions):
-    trips = (
+def get_trips(positions):
+    trip_durations = (
         positions.dropna(subset=["trip_number"])
+        .rename_axis(index=["date_time"])
         .reset_index()
         .groupby("trip_number")["date_time"]
         .agg(["min", "max"])
@@ -396,8 +386,9 @@ def get_trip_stats(positions):
         )
     )
 
-    trips["duration"] = (
-        trips["trip_end_datetime_utc"] - trips["trip_start_datetime_utc"]
+    trip_durations["trip_duration"] = (
+        trip_durations["trip_end_datetime_utc"]
+        - trip_durations["trip_start_datetime_utc"]
     )
 
     trip_distances = (
@@ -407,13 +398,9 @@ def get_trip_stats(positions):
         .rename("trip_distance")
     )
 
-    trip_stats = {
-        "number_trips": len(trips),
-        "trip_duration_median": trips.duration.median(),
-        "trip_distance_median": trip_distances.median(),
-    }
+    trips = trip_durations.join(trip_distances)
 
-    return trip_stats
+    return trips
 
 
 def analyse_vessel_route(
@@ -422,7 +409,7 @@ def analyse_vessel_route(
     lat: str = "latitude",
     lon: str = "longitude",
     ports_h3_resolution: int = 7,
-) -> dict:
+) -> pd.Series:
     """Extracts information about a vessel's characteristics and habits from its
     historical positions.
 
@@ -447,7 +434,7 @@ def analyse_vessel_route(
             supplied
 
     Returns:
-        dict: dictionnary of computed statistics
+        pd.Series: Series of computed statistics
     """
 
     enriched_positions = enrich_positions(positions, ports_h3_ids, ports_h3_resolution)
@@ -457,7 +444,7 @@ def analyse_vessel_route(
         days_emitted - enriched_positions.groupby("date")["is_at_port"].any().sum()
     )
     days_at_sea_and_port = days_emitted - full_days_at_port - full_days_at_sea
-    trip_stats = get_trip_stats(enriched_positions)
+    trips = get_trips(enriched_positions)
 
     (
         bins,
@@ -467,6 +454,7 @@ def analyse_vessel_route(
         transit_speed,
         transit_std,
         fishing_speed_threshold,
+        cluster_separation,
     ) = find_fishing_transit_speed_threshold(
         enriched_positions[~enriched_positions.is_at_port].step_speed.values,
         init_fishing_speed=None,
@@ -484,8 +472,19 @@ def analyse_vessel_route(
             "transit_speed": transit_speed,
             "transit_std": transit_std,
             "fishing_speed_threshold": fishing_speed_threshold,
+            "cluster_separation": cluster_separation,
             "speed_bins": bins,
             "speed_counts": counts,
-            **trip_stats,
+            "number_trips": len(trips),
+            "trip_duration_median": trips.trip_duration.median(),
+            "trip_distance_median": trips.trip_distance.median(),
+            "trip_duration_sum": trips.trip_duration.sum(),
+            "trip_distance_sum": trips.trip_distance.sum(),
+            "estimated_annual_distance_travelled": trips.trip_distance.sum()
+            * 365
+            / days_emitted,
+            "estimated_annual_time_at_sea": trips.trip_duration.sum()
+            * 365
+            / days_emitted,
         }
     )
