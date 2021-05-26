@@ -160,6 +160,12 @@ def get_trip_numbers(
         pd.Series: Series with the same index as the input and computed trip_number
             as values
     """
+    if len(positions) < 2:
+        trip_numbers = pd.Series(
+            index=positions.index, data=[np.nan] * len(positions), name="trip_number"
+        )
+        return trip_numbers
+
     is_at_port = positions[is_at_port_column].values
     time_intervals = positions[time_intervals_column].values
 
@@ -212,24 +218,24 @@ def get_trip_numbers(
 
 def enrich_positions(
     positions: pd.DataFrame,
-    ports_h3_ids: Sequence[str],
+    is_at_port: str = "is_at_port",
     lat: str = "latitude",
     lon: str = "longitude",
-    ports_h3_resolution: int = 7,
 ) -> pd.DataFrame:
-    """Takes a pandas DataFrame with a datetime index and latitude, longitude columns
-    whose rows represent successive positions of a vessel, returns pandas DataFrame
-    with the same index and latitude and longitude columns, plus addtionnal computed
-    features in new columns : speed, location (at port / at sea), trip_numbers...
+    """Takes a pandas DataFrame with
+        - a datetime index
+        - latitude, longitude columns (float dtypes)
+        - a is_at_port column (bool dtype)
+    whose rows represent successive positions of a vessel
+
+    Returns pandas DataFrame with the same index and columns, plus addtionnal computed
+    features in new columns : speed, trip_numbers...
 
     Args:
         positions (pd.DataFrame): DataFrame representing a vessel route
-        ports_h3_ids (Sequence[str]): list-like object containing h3 indices of known
-            ports
+        is_at_port (str): column name of bools
         lat (str) : column name of latitude values
         lon (str) : column name of longitude values
-        ports_h3_resolution (int): the h3 resolution in which ports indices are
-            supplied
 
     Returns:
         pd.DataFrame: the same DataFrame, plus added columns with the computed features
@@ -253,51 +259,27 @@ def enrich_positions(
     #         .rename("window_course_change")
     #     )
 
-    dates = pd.Series(
-        positions.index.date.astype(np.datetime64), name="date", index=positions.index
-    )
+    enriched_positions = positions.copy(deep=True)
 
-    h3_indices = get_h3_indices(
-        positions, lat=lat, lon=lon, resolution=ports_h3_resolution
-    ).rename("h3")
+    enriched_positions["date"] = positions.index.date.astype(np.datetime64)
 
-    is_at_port = h3_indices.isin(ports_h3_ids).rename("is_at_port")
+    enriched_positions["step_distance"] = get_step_distances(
+        positions, how="backward"
+    ).rename("step_distance")
 
-    step_distances = get_step_distances(positions, how="backward").rename(
-        "step_distance"
-    )
-
-    time_intervals = get_datetime_index_intervals(
+    enriched_positions["time_interval"] = get_datetime_index_intervals(
         positions, unit="h", how="backward"
     ).rename("time_interval")
 
-    step_speeds = (step_distances / 1852 / time_intervals).rename("step_speed")
-
-    #     window_total_distances = step_distances.rolling(window).sum().rename("window_total_distance")
-    #     window_speed = (window_total_distances / 1000 / window_duration / 1.852).rename("window_speed")
-
-    #     window_net_distances = get_window_net_distances(positions, window=window)
-    #     linearity = (window_net_distances / window_total_distances).rename("linearity")
-
-    enriched_positions = (
-        positions.join(dates)
-        .join(is_at_port)
-        .join(step_distances)
-        .join(time_intervals)
-        .join(step_speeds)
-        #         .join(course_changes)
-        #         .join(window_course_changes)
-        #         .join(window_net_distances)
-        #         .join(window_total_distances)
-        #         .join(linearity)
-        #         .join(window_speed)
+    enriched_positions["step_speed"] = (
+        enriched_positions["step_distance"].values
+        / 1852
+        / enriched_positions["time_interval"].values
     )
 
-    trip_numbers = get_trip_numbers(
+    enriched_positions["trip_number"] = get_trip_numbers(
         enriched_positions[["is_at_port", "time_interval"]]
-    ).rename("trip_number")
-
-    enriched_positions = enriched_positions.join(trip_numbers)
+    )
 
     return enriched_positions
 
@@ -372,43 +354,38 @@ def find_fishing_transit_speed_threshold(
 
 
 def get_trips(positions):
-    trip_durations = (
-        positions.dropna(subset=["trip_number"])
-        .rename_axis(index=["date_time"])
-        .reset_index()
-        .groupby("trip_number")["date_time"]
-        .agg(["min", "max"])
-        .rename(
-            columns={
-                "min": "trip_start_datetime_utc",
-                "max": "trip_end_datetime_utc",
-            }
-        )
+
+    #### TODO : move dropna to caller, use sort to reduce min max aggregations
+    trips = positions.dropna(subset=["trip_number"])
+    trips = trips.rename_axis(index=["date_time"])
+    trips = trips.reset_index()
+    trips = trips.groupby("trip_number")["date_time"]
+    trips = trips.agg(["min", "max"])
+    trips = trips.rename(
+        columns={
+            "min": "trip_start_datetime_utc",
+            "max": "trip_end_datetime_utc",
+        }
     )
 
-    trip_durations["trip_duration"] = (
-        trip_durations["trip_end_datetime_utc"]
-        - trip_durations["trip_start_datetime_utc"]
+    trips["trip_duration"] = (
+        trips["trip_end_datetime_utc"] - trips["trip_start_datetime_utc"]
     )
 
-    trip_distances = (
-        positions.dropna(subset=["trip_number"])
-        .groupby("trip_number")["step_distance"]
-        .sum()
-        .rename("trip_distance")
-    )
+    trip_distances = positions.dropna(subset=["trip_number"])
+    trip_distances = trip_distances.groupby("trip_number")["step_distance"]
+    trip_distances = trip_distances.sum()
 
-    trips = trip_durations.join(trip_distances)
+    trips["trip_distance"] = trip_distances
 
     return trips
 
 
-def analyse_vessel_route(
+def analyze_vessel_route(
     positions: pd.DataFrame,
-    ports_h3_ids: Sequence[str],
+    days_analyzed: int,
     lat: str = "latitude",
     lon: str = "longitude",
-    ports_h3_resolution: int = 7,
 ) -> pd.Series:
     """Extracts information about a vessel's characteristics and habits from its
     historical positions.
@@ -420,7 +397,6 @@ def analyse_vessel_route(
 
     In addition, a list of h3 indices of known ports must be supplied.
 
-
     The result is returned as a dictionnary of computed statistics and information.
 
 
@@ -428,6 +404,8 @@ def analyse_vessel_route(
         positions (pd.DataFrame): DataFrame representing the vessel's positions
         ports_h3_ids (Sequence[str]): list-like object containing h3 indices of known
             ports
+        days_analyzed (int): number of days of the analysis period. Used for
+            normalization when covering less than a year.
         lat (str) : column name of latitude values
         lon (str) : column name of longitude values
         ports_h3_resolution (int): the h3 resolution in which ports indices are
@@ -437,54 +415,54 @@ def analyse_vessel_route(
         pd.Series: Series of computed statistics
     """
 
-    enriched_positions = enrich_positions(positions, ports_h3_ids, ports_h3_resolution)
-    days_emitted = enriched_positions["date"].nunique()
-    full_days_at_port = enriched_positions.groupby("date")["is_at_port"].all().sum()
-    full_days_at_sea = (
-        days_emitted - enriched_positions.groupby("date")["is_at_port"].any().sum()
-    )
-    days_at_sea_and_port = days_emitted - full_days_at_port - full_days_at_sea
-    trips = get_trips(enriched_positions)
+    enriched_positions = enrich_positions(positions)
 
-    (
-        bins,
-        counts,
-        fishing_speed,
-        fishing_std,
-        transit_speed,
-        transit_std,
-        fishing_speed_threshold,
-        cluster_separation,
-    ) = find_fishing_transit_speed_threshold(
-        enriched_positions[~enriched_positions.is_at_port].step_speed.values,
-        init_fishing_speed=None,
-        init_transit_speed=None,
-    )
+    days_emitted = enriched_positions["date"].nunique()
+    emission_completeness_ratio = min(1, days_emitted / days_analyzed)
+
+    # Compute trip metrics
+    trips = get_trips(enriched_positions)
+    number_trips = len(trips)
+    trip_duration_median = trips.trip_duration.median()
+    trip_distance_median = trips.trip_distance.median()
+    trip_duration_sum = trips.trip_duration.sum()
+    trip_distance_sum = trips.trip_distance.sum()
+
+    # Estimate metrics on a full year
+    estimated_annual_number_trips = int(number_trips * 365 / days_analyzed)
+    estimated_annual_distance_travelled = trip_distance_sum * 365 / days_analyzed
+    estimated_annual_time_at_sea = trip_duration_sum * 365 / days_analyzed
+
+    #     (
+    #         bins,
+    #         counts,
+    #         fishing_speed,
+    #         fishing_std,
+    #         transit_speed,
+    #         transit_std,
+    #         fishing_speed_threshold,
+    #         cluster_separation,
+    #     ) = find_fishing_transit_speed_threshold(
+    #         enriched_positions[~enriched_positions.is_at_port].step_speed.values,
+    #         init_fishing_speed=None,
+    #         init_transit_speed=None,
+    #     )
 
     return pd.Series(
         {
-            "days_emitted": days_emitted,
-            "full_days_at_port": full_days_at_port,
-            "full_days_at_sea": full_days_at_sea,
-            "days_at_sea_and_port": days_at_sea_and_port,
-            "fishing_speed": fishing_speed,
-            "fishing_std": fishing_std,
-            "transit_speed": transit_speed,
-            "transit_std": transit_std,
-            "fishing_speed_threshold": fishing_speed_threshold,
-            "cluster_separation": cluster_separation,
-            "speed_bins": bins,
-            "speed_counts": counts,
-            "number_trips": len(trips),
-            "trip_duration_median": trips.trip_duration.median(),
-            "trip_distance_median": trips.trip_distance.median(),
-            "trip_duration_sum": trips.trip_duration.sum(),
-            "trip_distance_sum": trips.trip_distance.sum(),
-            "estimated_annual_distance_travelled": trips.trip_distance.sum()
-            * 365
-            / days_emitted,
-            "estimated_annual_time_at_sea": trips.trip_duration.sum()
-            * 365
-            / days_emitted,
+            "emission_completeness_ratio": emission_completeness_ratio,
+            #             "fishing_speed": fishing_speed,
+            #             "fishing_std": fishing_std,
+            #             "transit_speed": transit_speed,
+            #             "transit_std": transit_std,
+            #             "fishing_speed_threshold": fishing_speed_threshold,
+            #             "cluster_separation": cluster_separation,
+            #             "speed_bins": bins,
+            #             "speed_counts": counts,
+            "estimated_annual_number_trips": estimated_annual_number_trips,
+            "trip_duration_median": trip_duration_median,
+            "trip_distance_median": trip_distance_median,
+            "estimated_annual_time_at_sea": estimated_annual_time_at_sea,
+            "estimated_annual_distance_travelled": estimated_annual_distance_travelled,
         }
     )
