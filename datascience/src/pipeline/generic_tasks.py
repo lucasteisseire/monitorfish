@@ -21,7 +21,8 @@ def extract(
     query_filepath: Union[Path, str],
     dtypes: Union[None, dict] = None,
     parse_dates: Union[list, dict, None] = None,
-    params=None,
+    params: Union[dict, None] = None,
+    chunksize: Union[int, None] = None,
 ) -> pd.DataFrame:
     """Run SQL query against the indicated database and return the result as a
     `pandas.DataFrame`.
@@ -50,7 +51,11 @@ def extract(
     """
 
     res = read_saved_query(
-        db_name, query_filepath, parse_dates=parse_dates, params=params
+        db_name,
+        query_filepath,
+        parse_dates=parse_dates,
+        params=params,
+        chunksize=chunksize,
     )
 
     if dtypes:

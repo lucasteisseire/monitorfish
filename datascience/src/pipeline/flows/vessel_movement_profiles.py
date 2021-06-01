@@ -12,19 +12,22 @@ from src.read_query import read_saved_query
 
 
 # @task(checkpoint=False)
-def extract_all_positions(start: str = "3 months", end: str = "0 days"):
-    positions = extract(
+def extract_all_positions(start: str = "1 year", end: str = "0 days"):
+    positions_iter = extract(
         db_name="monitorfish_remote",
         query_filepath="monitorfish/all_positions.sql",
-        dtypes={
-            "cfr": "category",
-            "external_immatriculation": "category",
-            "ircs": "category",
-        },
+        chunksize=1000000,
         params={"start": start, "end": end},
     )
-    positions = positions.set_index("date_time")
-    return positions
+
+    dtypes = {
+        "cfr": "category",
+        "external_immatriculation": "category",
+        "ircs": "category",
+    }
+
+    for positions in positions_iter:
+        yield positions.astype(dtypes)
 
 
 # @task(checkpoint=False)
@@ -63,13 +66,13 @@ def load_vessel_movement_profiles(profiles):
     )
 
 
-# def wip_flow():
-#     positions = extract_all_recent_positions("3 months")
-#     positions = tag_positions_at_port(positions)
-#     profiles = positions.groupby("cfr", observed=True).apply(
-#         lambda x: analyze_vessel_route(x, days_analyzed=1)
-#     )
-#     return profiles
+def wip_flow():
+    positions = extract_all_positions("3 months")
+    positions = tag_positions_at_port(positions)
+    profiles = positions.groupby("cfr", observed=True).apply(
+        lambda x: analyze_vessel_route(x, days_analyzed=1)
+    )
+    return profiles
 
 
 # with Flow("Vessel movement profiles") as flow:

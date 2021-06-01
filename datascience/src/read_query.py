@@ -14,7 +14,8 @@ def read_saved_query(
     db: str,
     sql_filepath: Union[str, Path],
     parse_dates: Union[list, dict, None] = None,
-    params=None,
+    params: Union[dict, None] = None,
+    chunksize: Union[None, int] = None,
     **kwargs
 ) -> pd.DataFrame:
     """Run saved SQLquery on a database. Supported databases :
@@ -37,16 +38,26 @@ def read_saved_query(
             (D, s, ns, ms, us) in case of parsing integer timestamps.
             - Dict of ``{column_name: arg dict}``, where the arg dict corresponds
             to the keyword arguments of :func:`pandas.to_datetime`
+        params: dict of query parameters
+        chunksize: if provided, returns an iterator of pandas DataFrame of the size
+            indicated
         kwargs : passed to pd.read_sql
 
     Returns:
         pd.DataFrame: Query results
     """
-    engine = create_engine(db=db)
+    engine = create_engine(db=db, execution_options=dict(stream_results=True))
     sql_filepath = QUERIES_LOCATION / sql_filepath
     with open(sql_filepath, "r") as sql_file:
         query = text(sql_file.read())
-    return pd.read_sql(query, engine, parse_dates=parse_dates, params=params, **kwargs)
+    return pd.read_sql(
+        query,
+        engine,
+        parse_dates=parse_dates,
+        params=params,
+        chunksize=chunksize,
+        **kwargs
+    )
 
 
 def read_query(
