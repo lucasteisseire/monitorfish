@@ -45,6 +45,7 @@ descartes = "^1.1.0"
 vptree = "^1.2"
 Rtree = "^0.9.7"
 jupyter-dash = "^0.4.0"
+guppy3 = "^3.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
