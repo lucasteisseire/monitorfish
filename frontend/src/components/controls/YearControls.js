@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react'
 import styled from 'styled-components'
 
 import { COLORS } from '../../constants/constants'
-import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
 import Control from './Control'
+import { ChevronIconCommon } from '../commonStyles/Icon.style'
 
 const YearControls = props => {
   const [isOpen, setIsOpen] = useState(false)
@@ -116,24 +116,11 @@ const Row = styled.div`
   line-height: 1.9em;
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
+const ChevronIcon = styled(ChevronIconCommon)`
+  float: right;
   width: 16px;
   margin-right: 10px;
   margin-top: 9px;
-  float: right;
-  
-  animation: ${props => props.isOpen ? 'chevron-layer-opening' : 'chevron-layer-closing'} 0.5s ease forwards;
-
-  @keyframes chevron-layer-opening {
-    0%   { transform: rotate(180deg); }
-    100% { transform: rotate(0deg); }
-  }
-
-  @keyframes chevron-layer-closing {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(180deg);   }
-  }
 `
 
 const List = styled.div`

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import styled from 'styled-components'
 import RegulatoryZoneSelectedZone from './RegulatoryZoneSelectedZone'
-import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
+// import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
 import { getHash } from '../../utils'
 import { getGearCategory } from '../../domain/use_cases/showLayer'
 import { getVectorLayerStyle } from '../../layers/styles/vectorLayerStyles'
@@ -10,6 +10,7 @@ import { ReactComponent as CloseIconSVG } from '../icons/Croix_grise.svg'
 import { COLORS } from '../../constants/constants'
 import { ReactComponent as ShowIconSVG } from '../icons/oeil_affiche.svg'
 import { ReactComponent as HideIconSVG } from '../icons/oeil_masque.svg'
+import { ChevronIconCommon } from '../commonStyles/Icon.style'
 
 const RegulatoryZoneSelectedLayer = props => {
   const [isOpen, setIsOpen] = useState(false)
@@ -121,7 +122,7 @@ const RegulatoryZoneSelectedLayer = props => {
         <Row>
             <Zone isLastItem={isLastItem} isOpen={isOpen}>
                 <Text title={regulatoryZoneName.replace(/[_]/g, ' ')} onClick={() => setIsOpen(!isOpen)}>
-                    <ChevronIcon isopen={isOpen}/>
+                    <ChevronIcon isOpen={isOpen}/>
                     {regulatoryZoneName.replace(/[_]/g, ' ')}
                 </Text>
                 {displayNumberOfZones()}
@@ -202,23 +203,10 @@ const Row = styled.li`
   display: block;
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
+const ChevronIcon = styled(ChevronIconCommon)`
   width: 16px;
   margin-right: 5px;
   margin-top: 5px;
-  
-  animation: ${props => props.isopen ? 'chevron-layer-opening' : 'chevron-layer-closing'} 0.5s ease forwards;
-
-  @keyframes chevron-layer-opening {
-    0%   { transform: rotate(180deg); }
-    100% { transform: rotate(0deg); }
-  }
-
-  @keyframes chevron-layer-closing {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(180deg);   }
-  }
 `
 
 export default RegulatoryZoneSelectedLayer

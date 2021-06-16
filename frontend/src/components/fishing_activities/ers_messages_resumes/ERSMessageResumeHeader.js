@@ -2,9 +2,9 @@ import React, { useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import { COLORS } from '../../../constants/constants'
 import { ERSMessageType as ERSMessageTypeEnum } from '../../../domain/entities/ERS'
-import { ReactComponent as ChevronIconSVG } from '../../icons/Chevron_simple_gris.svg'
 import { ReactComponent as ArrowSVG } from '../../icons/Picto_fleche-pleine-droite.svg'
 import { ReactComponent as NotAcknowledgedSVG } from '../../icons/Message_non_acquitte.svg'
+import { ChevronIconCommon } from '../../commonStyles/Icon.style'
 
 const ERSMessageResumeHeader = props => {
   const firstUpdate = useRef(true)
@@ -126,27 +126,11 @@ const ERSMessageTitle = styled.div`
   ${props => !props.isLastItem ? `border-bottom: 1px solid ${COLORS.gray};` : null}
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
+const ChevronIcon = styled(ChevronIconCommon)`
   width: 17px;
   float: left;
   margin-right: 10px;
   margin-top: 12px;
-  
-  animation: ${props => props.isOpen ? `chevron-${props.name}-resume-opening` : `chevron-${props.name}-resume-closing`} 0.2s ease forwards;
-
-  ${props => `
-      @keyframes chevron-${props.name}-resume-opening {
-        0%   { transform: rotate(180deg); }
-        100% { transform: rotate(0deg); }
-      }
-    
-      @keyframes chevron-${props.name}-resume-closing {
-        0%   { transform: rotate(0deg); }
-        100% { transform: rotate(180deg);   }
-      }
-      `
-    }
 `
 
 export default ERSMessageResumeHeader

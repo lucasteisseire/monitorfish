@@ -9,7 +9,7 @@ import showRegulatoryZoneMetadata from '../../domain/use_cases/showRegulatoryZon
 import LayersEnum from '../../domain/entities/layers'
 import { COLORS } from '../../constants/constants'
 import zoomInSubZone from '../../domain/use_cases/zoomInSubZone'
-import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
+import { ChevronIconCommon } from '../commonStyles/Icon.style'
 
 const LawType = props => {
   const [numberOfZonesOpened, setNumberOfZonesOpened] = useState(0)
@@ -93,7 +93,7 @@ const LawType = props => {
   return (<LawTypeContainer>
     <LawTypeName onClick={() => setIsOpen(!isOpen)}>
       <LawTypeText>{lawType}</LawTypeText>
-      <ChevronIcon isopen={isOpen}/>
+      <ChevronIcon isOpen={isOpen}/>
     </LawTypeName>
     {isOpen && <RegulatoryZoneLayerList isOpen={isOpen}>
       {displayRegulatoryZoneList(regZoneByLawType[lawType])}
@@ -140,13 +140,11 @@ const RegulatoryZoneLayerList = styled.ul`
   transition:  all 0.5s;
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: ${props => props.isopen ? 'rotate(0deg)' : 'rotate(180deg)'};
+const ChevronIcon = styled(ChevronIconCommon)`
   width: 17px;
   float: right;
   margin-right: 10px;
   margin-top: 5px;
-  transition: all 0.5s;
 `
 
 export default LawType

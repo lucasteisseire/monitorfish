@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import styled from 'styled-components'
 import { COLORS } from '../../../constants/constants'
-import { ReactComponent as ChevronIconSVG } from '../../icons/Chevron_simple_gris.svg'
+import { ChevronIconCommon } from '../../commonStyles/Icon.style'
 import { ERSSpeciesPresentation, ERSSpeciesPreservationState } from '../../../domain/entities/ERS'
 import countries from 'i18n-iso-countries'
 import { ReactComponent as WarningSVG } from '../../icons/Point_exclamation_info.svg'
@@ -209,27 +209,11 @@ const Content = styled.div`
   }
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
+const ChevronIcon = styled(ChevronIconCommon)`
   width: 17px;
   float: right;
   margin-right: 10px;
   margin-top: 2px;
-  
-  animation: ${props => props.isOpen ? `chevron-${props.name}-zones-opening` : `chevron-${props.name}-zones-closing`} 0.2s ease forwards;
-
-  ${props => `
-      @keyframes chevron-${props.name}-zones-opening {
-        0%   { transform: rotate(180deg); }
-        100% { transform: rotate(0deg); }
-      }
-    
-      @keyframes chevron-${props.name}-closing {
-        0%   { transform: rotate(0deg); }
-        100% { transform: rotate(180deg);   }
-      }
-      `
-}
 `
 
 const TableBody = styled.tbody``

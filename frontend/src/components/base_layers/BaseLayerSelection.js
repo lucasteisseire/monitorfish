@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import styled from 'styled-components'
-import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
+import { ChevronIconCommon } from '../commonStyles/Icon.style'
 
 import BaseLayerItem from './BaseLayerItem'
 import { COLORS } from '../../constants/constants'
@@ -92,24 +92,11 @@ const ListItem = styled.li`
   line-height: 1.9em;
 `
 
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
+const ChevronIcon = styled(ChevronIconCommon)`
   width: 17px;
   float: right;
   margin-right: 10px;
   margin-top: 5px;
-  
-  animation: ${props => props.isOpen ? 'chevron-zones-opening' : 'chevron-zones-closing'} 0.5s ease forwards;
-
-  @keyframes chevron-zones-opening {
-    0%   { transform: rotate(180deg); }
-    100% { transform: rotate(0deg); }
-  }
-
-  @keyframes chevron-zones-closing {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(180deg);   }
-  }
 `
 
 export default BaseLayerSelection

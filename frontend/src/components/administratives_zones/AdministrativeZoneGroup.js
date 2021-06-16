@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import styled from 'styled-components'
 import { COLORS } from '../../constants/constants'
 import AdministrativeZone from './AdministrativeZone'
-import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
+// import { ReactComponent as ChevronIconSVG } from '../icons/Chevron_simple_gris.svg'
+import { ChevronIconCommon } from '../commonStyles/Icon.style'
 
 const AdministrativeZoneGroup = props => {
   const [isOpen, setIsOpen] = useState(false)
@@ -45,6 +46,12 @@ const AdministrativeZoneGroup = props => {
         }</>
 }
 
+const ChevronIcon = styled(ChevronIconCommon)`
+  width: 16px;
+  margin-right: 5px;
+  margin-top: 5px;
+`
+
 const ListItem = styled.span`
 display: -webkit-box;
 display: -webkit-flex;
@@ -64,25 +71,6 @@ font-weight: 300;
 const Row = styled.div`
   width: 100%;
   display: block;
-`
-
-const ChevronIcon = styled(ChevronIconSVG)`
-  transform: rotate(180deg);
-  width: 16px;
-  margin-right: 5px;
-  margin-top: 5px;
-  
-  animation: ${props => props.isOpen ? 'chevron-layer-opening' : 'chevron-layer-closing'} 0.5s ease forwards;
-
-  @keyframes chevron-layer-opening {
-    0%   { transform: rotate(180deg); }
-    100% { transform: rotate(0deg); }
-  }
-
-  @keyframes chevron-layer-closing {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(180deg);   }
-  }
 `
 
 const Text = styled.span`
