@@ -1,14 +1,17 @@
-from typing import Union
+import time
+import uuid
+from datetime import datetime
+from typing import Tuple
 
 import numpy as np
-import pandas as pd
 import prefect
-from prefect import Flow, task
+from prefect import Flow, Parameter, case, task
+from prefect.tasks.prefect import StartFlowRun
 
 from src.pipeline.generic_tasks import extract, load
+from src.pipeline.helpers.datetime import get_datetime_chunks
 from src.pipeline.helpers.ports import get_ports_h3_set
 from src.pipeline.helpers.spatial import analyze_vessel_route, get_h3_indices
-from src.read_query import read_saved_query
 
 
 # @task(checkpoint=False)
@@ -75,5 +78,96 @@ def wip_flow():
     return profiles
 
 
-# with Flow("Vessel movement profiles") as flow:
-#     pass
+@task(checkpoint=False)
+def get_chunks(chunk_size: str, chunks_from_now: int) -> Tuple:
+    logger = prefect.context.get("logger")
+    utcnow = datetime.datetime.utcnow()
+    chunks = get_datetime_chunks(
+        chunk_size=chunk_size, chunks_from_now=chunks_from_now, now=utcnow
+    )
+
+    logger.info(chunks)
+    return chunks
+
+
+@task(checkpoint=False)
+def delete():
+    logger = prefect.context.get("logger")
+    logger.info("Deleting existing chunks")
+
+
+@task(checkpoint=False)
+def extract_(id, start_datetime_utc, end_datetime_utc):
+    logger = prefect.context.get("logger")
+    logger.info(
+        f"Extracting chunk {id} from {start_datetime_utc} to {end_datetime_utc}..."
+    )
+    time.sleep(3)
+    logger.info(f"Chunk {id} from {start_datetime_utc} to {end_datetime_utc} extraced.")
+    return [1, 2, 3]
+
+
+@task(checkpoint=False)
+def transform(data):
+    logger = prefect.context.get("logger")
+    logger.error(f"Transforming data {data}.")
+    return data * 2
+
+
+@task(checkpoint=False)
+def load_(data):
+    logger = prefect.context.get("logger")
+    logger.info(f"Loading data {data}")
+
+
+with Flow("Movement profiles chunk") as sub_flow:
+
+    id = Parameter("id")
+    start_datetime_utc = Parameter("start_datetime_utc")
+    end_datetime_utc = Parameter("end_datetime_utc")
+
+    data = extract_(id, start_datetime_utc, end_datetime_utc)
+    transform(data)
+    load_(data)
+
+
+@task(checkpoint=False)
+def make_flow_runs(chunk):
+
+    parameters = {
+        "id": chunk.id,
+        "start_datetime_utc": chunk.start_datetime_utc,
+        "end_datetime_utc": chunk.end_datetime_utc,
+    }
+
+    logger = prefect.context.get("logger")
+    logger.info(f"Launching processing of chunk with parameters {parameters}")
+
+    StartFlowRun(
+        flow_name="Movement profiles chunk",
+        project_name="Test project",
+        parameters=parameters,
+        wait=True,
+    ).run(idempotency_key=uuid.uuid4().hex)
+
+
+@task(checkpoint=False)
+def run_flow(flow_run):
+    flow_run.run(idempotency_key=uuid.uuid4().hex)
+
+
+with Flow("Movement profiles") as flow:
+    chunks_from_now = Parameter("chunks_from_now", default=1)
+    chunk_size = Parameter("chunk_size", default="month")
+    delete_existing_chunks = Parameter("delete_existing_chunks", default=False)
+
+    with case(delete_existing_chunks, True):
+        delete()
+
+    chunks = get_chunks(chunk_size, chunks_from_now)
+    make_flow_runs.map(chunks)
+
+
+if __name__ == "__main__":
+    sub_flow.register("Test project")
+    flow.register("Test project")
