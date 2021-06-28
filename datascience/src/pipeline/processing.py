@@ -1,5 +1,6 @@
 import datetime
 import logging
+from ast import literal_eval
 from functools import partial
 from time import sleep
 from typing import Any, Iterable, List, Union
@@ -49,6 +50,24 @@ def concatenate_values(row: pd.Series) -> List:
             res.append(x)
             result_set.add(x)
     return res
+
+
+def parse_string_representation_of_list(s: str) -> list:
+    """Parse the string representation of a list, returns said list.
+    Useful when extracting data from a csv that contains columns with list dtype.
+
+    On error, return None.
+
+    Args:
+        s (str): string representation of a list
+
+    Returns:
+        list
+    """
+    try:
+        return literal_eval(s)
+    except:
+        return None
 
 
 def concatenate_columns(df: pd.DataFrame, input_col_names: List) -> pd.Series:

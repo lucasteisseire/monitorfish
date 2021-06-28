@@ -12,7 +12,11 @@ from shapely import wkt
 
 from config import LIBRARY_LOCATION, PORTS_URL, PROXIES
 from src.db_config import create_engine
-from src.pipeline.processing import combine_overlapping_columns
+from src.pipeline.generic_tasks import load
+from src.pipeline.processing import (
+    combine_overlapping_columns,
+    parse_string_representation_of_list,
+)
 from src.pipeline.utils import delete, get_table, psql_insert_copy
 from src.read_query import read_saved_query, read_table
 from src.utils.geocode import geocode
@@ -449,36 +453,30 @@ def extract_datagouv_ports(ports_url: str = PORTS_URL, proxies: dict = None):
         "port_name",
         "latitude",
         "longitude",
+        "stationary_vessels_h3_res9",
     ]
 
     ports = pd.read_csv(f, dtype=dtype, usecols=use_cols)
+    ports["stationary_vessels_h3_res9"] = ports.stationary_vessels_h3_res9.map(
+        parse_string_representation_of_list
+    )
+
     return ports
 
 
 @task(checkpoint=False)
 def load_ports_to_monitorfish(ports):
-
-    schema = "public"
-    table_name = "ports"
-    e = create_engine("monitorfish_remote")
-    logger = prefect.context.get("logger")
-
-    ports_table = get_table(table_name, schema, e, logger)
-
-    with e.begin() as connection:
-
-        # Delete all rows from table
-        delete(ports_table, connection, logger)
-
-        # Insert data into table
-        ports.to_sql(
-            name=table_name,
-            con=connection,
-            schema=schema,
-            index=False,
-            method=psql_insert_copy,
-            if_exists="append",
-        )
+    load(
+        ports,
+        table_name="ports",
+        schema="public",
+        db_name="monitorfish_remote",
+        logger=prefect.context.get("logger"),
+        delete_before_insert=True,
+        pg_array_columns=["stationary_vessels_h3_res9"],
+        handle_array_conversion_errors=True,
+        value_on_array_conversion_error="{}",
+    )
 
 
 with Flow("Ports") as flow:
