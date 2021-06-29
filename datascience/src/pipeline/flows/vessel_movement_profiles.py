@@ -42,7 +42,7 @@ def tag_positions_at_port(positions):
         positions, lat="latitude", lon="longitude", resolution=7
     ).rename("h3")
 
-    ports_h3_ids = get_ports_h3_set(resolution=7, k_ring=1)
+    ports_h3_ids = get_ports_h3_set()
 
     positions["is_at_port"] = np.isin(h3_indices.values, ports_h3_ids)
 
