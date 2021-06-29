@@ -107,8 +107,8 @@ def get_step_distances(
 
 def get_h3_indices(
     df: pd.DataFrame,
-    lat: float = "latitude",
-    lon: float = "longitude",
+    lat: str = "latitude",
+    lon: str = "longitude",
     resolution: int = 12,
 ):
 
@@ -116,6 +116,23 @@ def get_h3_indices(
         lambda row: h3.geo_to_h3(row["latitude"], row["longitude"], resolution), axis=1
     )
     return res
+
+
+def get_k_ring_of_h3_set(h3_sequence: Sequence[str], k: int) -> Sequence[str]:
+    """Takes an array-like sequence of h3 cells and an integer k, returns the set of h3
+    cells that belong to the k-ring of at least one of the h3 cells in the input
+    sequence.
+
+    Args:
+        h3_sequence (sequence): sequence of h3 cells
+        k (int): number of rings to add around the input cells
+
+    Returns:
+        sequence[str]: sequence of h3 cells belonging to the k-ring of at least one of
+            the h3 cells in the input sequence
+    """
+    h3_cells = [h3.k_ring(h, k) for h in h3_sequence]
+    return set.union(*h3_cells)
 
 
 def get_trip_numbers(
