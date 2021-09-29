@@ -8,7 +8,7 @@ from prefect import Flow, task
 
 from config import ERS_FILES_LOCATION
 from src.db_config import create_engine
-from src.pipeline.parsers.ers import batch_parse
+from src.pipeline.parsers.ers.ers import batch_parse
 from src.pipeline.processing import drop_rows_already_in_table, to_json
 from src.pipeline.utils import get_table, move, psql_insert_copy
 
