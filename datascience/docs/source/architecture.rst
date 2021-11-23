@@ -78,3 +78,53 @@ Front end
 
 * Openlayers
 * React
+
+.. mermaid::
+  graph TD
+
+  subgraph Flux/données
+      subgraph FMC
+          C(Contrôles)
+          Positions(AIS/VMS/ERS)
+      end
+      subgraph Data.gouv.fr
+          Ports
+          Species
+      end
+      subgraph CNSP 
+          Legipeche
+          Façades
+      end
+  end
+
+
+  subgraph Servers
+      B(Backend) --> F(Frontend)
+      
+      G(Geoserver) --> F
+
+      subgraph monitorfish-pipeline-flows
+          Positions-->FLP(Positions)
+          C-->FLN(Navires)
+          FLR(regulations)
+          Legipeche-->FLR
+          Façades-->FLR
+      end
+      
+  end
+  subgraph Databases
+      subgraph CROSSA Etel
+          P(Postgis) --> G
+          P-->B
+      end
+      subgraph DAM SI Saint Malo
+          PDAMSI-->B
+          PDAMSI(Postgis)-->G
+          FLP-->PDAMSI
+          OCAN-->FLN
+          FLR-->PDAMSI
+          FLN-->PDAMSI
+      end
+  end
+
+  F-->U(User)

@@ -47,6 +47,18 @@ To install front end dependencies, execute:
 
     make install
 
+
+Init database
+
+start the database
+
+.. code-block:: shell
+
+    docker-compose up -d
+
+
+
+
 Run
 ---
 
@@ -64,13 +76,9 @@ To run the backend for development purpose (with hot-reload), open another termi
 
 * During the first run, dependencies will be downloaded
 * You'll need to install `psql` to interact with the Postgres database
-
-Then, insert the GIS layers to the postgres database by executing (make sure you have `psql` installed):
-
-.. code-block:: shell
-
-    ./infra/remote/postgis_insert_layers.sh
-
+* First run will apply migrations on db
+* However, no data will be inserted yet. 
+On first run, you may encouter error messages because db was not initialized with data.
 
 Export the required environment variables:
 
@@ -81,6 +89,22 @@ Export the required environment variables:
     export DB_SCHEMA=public
     export DB_USER=postgres
     export DB_PASSWORD=postgres
+
+psql will need the PGPASSWORD env variable to be set.
+
+.. code-block:: shell
+
+    export PGPASSWORD=postgres
+
+
+
+Then, insert the GIS layers to the postgres database by executing (make sure you have `psql` installed):
+
+.. code-block:: shell
+
+    ./infra/remote/postgis_insert_layers.sh
+
+
 
 
 Finally add to Geoserver the layers by executing (make sure to remove your proxy if you have one configured with `unset HTTP_PROXY` and `unset http_proxy`):
