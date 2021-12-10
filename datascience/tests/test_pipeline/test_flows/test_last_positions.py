@@ -96,9 +96,18 @@ class TestLastPositionsFlow(unittest.TestCase):
     def test_split(self):
         previous_last_positions = pd.DataFrame(
             {
-                "cfr": ["A", "B", "C", None, None, "G"],
-                "external_immatriculation": ["AA", "BB", None, "DD", None, "GG"],
-                "ircs": ["AAA", None, None, None, "EEE", "GGG"],
+                "cfr": ["A", "B", "C", None, None, "G", "H", "H"],
+                "external_immatriculation": [
+                    "AA",
+                    "BB",
+                    None,
+                    "DD",
+                    None,
+                    "GG",
+                    "HH",
+                    "H-H",
+                ],
+                "ircs": ["AAA", None, None, None, "EEE", "GGG", "HHH", "HHH"],
                 "last_position_datetime_utc": [
                     datetime(2021, 10, 1, 20, 52, 10),
                     datetime(2021, 10, 1, 20, 42, 10),
@@ -106,24 +115,28 @@ class TestLastPositionsFlow(unittest.TestCase):
                     datetime(2021, 10, 1, 19, 52, 10),
                     datetime(2021, 10, 1, 20, 16, 10),
                     datetime(2021, 10, 1, 19, 16, 55),
+                    datetime(2021, 10, 1, 19, 16, 55),
+                    datetime(2021, 10, 1, 19, 16, 55),
                 ],
             }
         )
 
         new_last_positions = pd.DataFrame(
             {
-                "cfr": ["A", None, "F", "G"],
-                "external_immatriculation": ["AA", None, "FF", "GG"],
-                "ircs": ["AAA", "EEE", None, None],
+                "cfr": ["A", None, "F", "G", "H", "H"],
+                "external_immatriculation": ["AA", None, "FF", "GG", "HH", "H-H"],
+                "ircs": ["AAA", "EEE", None, None, "HHH", "HHH"],
                 "last_position_datetime_utc": [
                     datetime(2021, 10, 1, 21, 52, 10),
                     datetime(2021, 10, 1, 21, 56, 10),
                     datetime(2021, 10, 1, 21, 54, 10),
                     datetime(2021, 10, 1, 20, 17, 25),
+                    datetime(2021, 10, 1, 20, 16, 55),
+                    datetime(2021, 10, 1, 20, 16, 55),
                 ],
-                "some": [1, 2, 3, 4],
-                "more": ["a", "b", "c", "g"],
-                "data": [None, 2.256, "Bla", "Picachu"],
+                "some": [1, 2, 3, 4, 5, 6],
+                "more": ["a", "b", "c", "g", "h", "i"],
+                "data": [None, 2.256, "Bla", "Picachu", "What", "Not"],
             }
         )
 
@@ -132,6 +145,24 @@ class TestLastPositionsFlow(unittest.TestCase):
             new_vessels_last_positions,
             last_positions_to_update,
         ) = split.run(previous_last_positions, new_last_positions)
+
+        print()
+        print("unchanged_previous_last_positions")
+        print()
+        print(unchanged_previous_last_positions)
+        print()
+
+        print()
+        print("new_vessels_last_positions")
+        print()
+        print(new_vessels_last_positions)
+        print()
+
+        print()
+        print("last_positions_to_update")
+        print()
+        print(last_positions_to_update)
+        print()
 
         expected_unchanged_previous_last_positions = previous_last_positions.iloc[
             [1, 2, 3]
