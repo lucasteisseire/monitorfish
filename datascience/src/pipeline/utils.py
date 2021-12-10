@@ -148,3 +148,14 @@ def move(
             shutil.move(src_fp.as_posix(), dest_dirpath.as_posix())
         else:
             raise ValueError(f"if_exists must be 'raise' or 'replace', got {if_exists}")
+
+
+def make_create_temp_table_query(columns_types: dict, temp_table_name: str):
+    columns = ",\n".join([f'"{col}" {dtype}' for col, dtype in columns_types.items()])
+
+    query = f"""CREATE TEMP TABLE "{temp_table_name}"(
+    {columns}
+)
+ON COMMIT DROP;"""
+
+    return query
