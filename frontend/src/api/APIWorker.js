@@ -15,7 +15,7 @@ import { setRegulatoryLayers } from '../domain/shared_slices/Regulatory'
 import { unByKey } from 'ol/Observable'
 import { getRegulatoryLayersWithoutTerritory } from '../domain/entities/regulatory'
 
-export const TEN_MINUTES = 600000
+export const TEN_MINUTES = 180000
 
 const APIWorker = () => {
   const dispatch = useDispatch()
